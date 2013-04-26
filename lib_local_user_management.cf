@@ -32,11 +32,17 @@ bundle agent local_users_enforce_password (users) {
 #     "any" usebundle => local_users_enforce_password('currentbundlename.users');
 #
     vars:
-        linux|solaris|hpux::
+        any::
             "usersindex"
                 slist      => getindices("$(users)");
+
+        linux|solaris|hpux::
             "pwfile"
                 string     => "/etc/shadow";
+
+        aix::
+            "pwfile"
+                string     => "/etc/security/passwd";
 
         !have_trusted_mode::
             "days_since_epoch"
@@ -44,10 +50,10 @@ bundle agent local_users_enforce_password (users) {
                 comment    => "Used for password aging; only needed if the password is updated",
                 ifvarclass => "set_$(usersindex)_password";
 
-        have_trusted_mode::
+        have_trusted_mode|aix::
             "seconds_since_epoch"
                 string     => execresult("/usr/bin/perl -le 'print time'", "noshell"),
-                comment    => "Used for trusted mode password aging, only needed if the password is updated",
+                comment    => "Used for HP-UX TCB and AIX password aging, only needed if the password is updated",
                 ifvarclass => "set_$(usersindex)_password";
   
     classes:
@@ -57,7 +63,6 @@ bundle agent local_users_enforce_password (users) {
 
             "any"
                 expression => regextract("^(.).*", "$(usersindex)", "$(usersindex)_chars");
-
 
     files:
         linux|solaris|(hpux.!have_trusted_mode)::
@@ -82,9 +87,19 @@ bundle agent local_users_enforce_password (users) {
                 edit_line   => set_hpux_tcb("u_succhg", "$(seconds_since_epoch)"),
                 ifvarclass  => "set_$(usersindex)_password";
 
+        aix::
+             "$(pwfile)"
+                comment     => "Ensure password hash is set as expected",
+                edit_line   => set_aix_stanza("$(this.usersindex)", "password", "$($(this.users)[$(this.usersindex)][passwdhash])"),
+                classes     => if_repaired("set_$(usersindex)_password");
+
+             "$(pwfile)"
+                comment     => "Update time of last password change to current time expressed as seconds since epoch if the password is updated",
+                edit_line   => set_aix_stanza("$(this.usersindex)", "lastupdate", "$(seconds_since_epoch)"),
+                ifvarclass  => "set_$(usersindex)_password";
 
     reports:
-        verbose_mode.(linux|solaris|(hpux.!have_trusted_mode)::
+        verbose_mode.(linux|solaris|aix|(hpux.!have_trusted_mode))::
             "$(usersindex) password hash was set in $(this.pwfile)",
                 ifvarclass => "set_$(usersindex)_password";
 
@@ -94,8 +109,8 @@ bundle agent local_users_enforce_password (users) {
 }
 
 bundle edit_line set_hpux_tcb(key, value)
-# Changes an existing key in the HP-UX Trusted Mode TCB database
-# file which is being edited to the specified value.
+# Insures an existing key in the HP-UX Trusted Mode TCB database
+# targe file is set to the specified value.
 {
     replace_patterns:
 	    ":($(key))([=#])(?!$(value))[^:]*(:|\\\\|$)"
@@ -109,3 +124,25 @@ body replace_with replace_hpux_tcb_value(value)
   occurrences   => "all";
 }
 
+bundle edit_line set_aix_stanza(stanza_tag, key, value)
+# Insures an existing key in the specified stanza of an AIX
+# stanza-oriented config file, such as /etc/security/password,
+# is set to the specified value.
+{
+    replace_patterns:
+        "(\h*)($(key))(\h*=\h*)(?!$(value)).*"
+             select_region => select_aix_stanza("$(stanza_tag)"),
+             replace_with  => replace_aix_stanza_value("$(value)");
+}
+
+body select_aix_stanza(stanza_tag)
+{
+  select_start            => "^$(stanza_tag):";
+  select_end              => "^\h*$";
+}
+
+body replace_aix_stanza_value(value)
+{
+  replace_value => "$(match.1)$(match.2)$(match.3)$(value)";
+  occurrences   => "all";
+}
