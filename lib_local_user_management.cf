@@ -55,7 +55,7 @@ bundle agent local_users_enforce_password (users) {
             "have_trusted_mode"
                 expression => fileexists("/tcb/files/auth/");
 
-            "first_$(usersindex)_char"
+            "any"
                 expression => regextract("^(.).*", "$(usersindex)", "$(usersindex)_chars");
 
 
@@ -98,8 +98,8 @@ bundle edit_line set_hpux_tcb(key, value)
 # file which is being edited to the specified value.
 {
     replace_patterns:
-	    ":($(key))([=#])(?!$(value))[^:]*(:|\\\\)"
-                comment      => "Ensure the TCB key in the edited file is set to the specified value",
+	    ":($(key))([=#])(?!$(value))[^:]*(:|\\\\|$)"
+                comment      => "Ensure the TCB key in the target file is set to the specified value",
                 replace_with => replace_hpux_tcb_value("$(value)");
 }
 
