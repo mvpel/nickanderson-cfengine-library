@@ -33,33 +33,35 @@ bundle agent local_users_enforce_password (users) {
 #
     vars:
         linux|solaris|hpux::
-            "usersindex"    slist   => getindices("$(users)");
+            "usersindex"
+                slist      => getindices("$(users)");
+            "pwfile"
+                string     => "/etc/shadow";
 
-        linux|solaris|(hpux.!have_trusted_mode)::
-            "pwfile"        string  => "/etc/shadow";
+#        hpux::
+#            "$(usersindex)_chars"
+#                slist      => splitstring("$(usersindex)", "", "1"),
+#                comment    => "The first character of the username is needed to build the path to the TCB data file";
+#
+        !have_trusted_mode::
             "days_since_epoch"
                 string     => execresult("/usr/bin/perl -le 'print int time/(60*60*24)'", "noshell"),
-                comment    => "Used for password aging, only needed if the users password is updated, otherwise dont waste time forking a process",
+                comment    => "Used for password aging; only needed if the password is updated",
                 ifvarclass => "set_$(usersindex)_password";
 
-        hpux.have_trusted_mode::
-            "pwfile"        string  => "TCB database";
+        have_trusted_mode::
             "seconds_since_epoch"
                 string     => execresult("/usr/bin/perl -le 'print int time'", "noshell"),
                 comment    => "Used for trusted mode password aging, only needed if the password is updated",
                 ifvarclass => "set_$(usersindex)_password";
   
-        hpux::
-            "$(usersindex)_chars"
-                slist      => splitstring("$(usersindex)", "", "1"),
-                comment    => "Makes the first character of the username available to build the path to the TCB data file",
-                ifvarclass => filexists("/tcb/files/auth/");	# This var must be set before classes are defined
-
-
     classes:
         hpux::
             "have_trusted_mode"
                 expression => fileexists("/tcb/files/auth/");
+
+            "first_$(usersindex)_char"
+                expression => regextract("^(.).*", "$(usersindex)", "$(usersindex)_chars");
 
 
     files:
@@ -75,12 +77,12 @@ bundle agent local_users_enforce_password (users) {
                 ifvarclass  => "set_$(usersindex)_password";
 
         hpux.have_trusted_mode::
-             "/tcb/files/auth/$($(this.usersindex)_chars[0])/$(this.usersindex)"
+             "/tcb/files/auth/$($(this.usersindex)_chars[1])/$(this.usersindex)"
                 comment     => "Ensure TCB password is set as expected",
                 edit_line   => set_hpux_tcb("u_pwd", "$($(this.users)[$(this.usersindex)][passwdhash])"),
                 classes     => if_repaired("set_$(usersindex)_password");
 
-             "/tcb/files/auth/$($(this.usersindex)_chars[0])/$(this.usersindex)"
+             "/tcb/files/auth/$($(this.usersindex)_chars[1])/$(this.usersindex)"
                 comment     => "Update time of last password change to current time expressed as seconds since epoch if the password is updated",
                 edit_line   => set_hpux_tcb("u_succhg", "$(seconds_since_epoch)"),
                 ifvarclass  => "set_$(usersindex)_password";
