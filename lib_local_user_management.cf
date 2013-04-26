@@ -40,7 +40,7 @@ bundle agent local_users_enforce_password (users) {
 
         !have_trusted_mode::
             "days_since_epoch"
-                string     => execresult("/usr/bin/perl -le 'print int time/(60*60*24)'", "noshell"),
+                string     => execresult("/usr/bin/perl -le 'print int time/(86400)'", "noshell"),
                 comment    => "Used for password aging; only needed if the password is updated",
                 ifvarclass => "set_$(usersindex)_password";
 
