@@ -44,7 +44,7 @@ bundle agent local_users_enforce_password (users) {
             "pwfile"
                 string     => "/etc/security/passwd";
 
-        !have_trusted_mode::
+        linux|solaris|(hpux.!have_trusted_mode)::
             "days_since_epoch"
                 string     => execresult("/usr/bin/perl -le 'print int time/86400'", "noshell"),
                 comment    => "Used for password aging; only needed if the password is updated",
