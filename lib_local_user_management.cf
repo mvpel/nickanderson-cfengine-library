@@ -38,11 +38,6 @@ bundle agent local_users_enforce_password (users) {
             "pwfile"
                 string     => "/etc/shadow";
 
-#        hpux::
-#            "$(usersindex)_chars"
-#                slist      => splitstring("$(usersindex)", "", "1"),
-#                comment    => "The first character of the username is needed to build the path to the TCB data file";
-#
         !have_trusted_mode::
             "days_since_epoch"
                 string     => execresult("/usr/bin/perl -le 'print int time/(60*60*24)'", "noshell"),
@@ -89,8 +84,12 @@ bundle agent local_users_enforce_password (users) {
 
 
     reports:
-        verbose_mode.(linux|solaris|hpux)::
+        verbose_mode.(linux|solaris|(hpux.!have_trusted_mode)::
             "$(usersindex) password hash was set in $(this.pwfile)",
+                ifvarclass => "set_$(usersindex)_password";
+
+        verbose_mode.hpux.have_trusted_mode::
+            "$(usersindex) password hash was set in /tcb/files/auth/$($(usersindex)_chars[1])/$(usersindex)",
                 ifvarclass => "set_$(usersindex)_password";
 }
 
@@ -99,14 +98,14 @@ bundle edit_line set_hpux_tcb(key, value)
 # file which is being edited to the specified value.
 {
     replace_patterns:
-	    ":($(key))([=#])(?!$(value))[^:]*:"
+	    ":($(key))([=#])(?!$(value))[^:]*(:|\\\\)"
                 comment      => "Ensure the TCB key in the edited file is set to the specified value",
                 replace_with => replace_hpux_tcb_value("$(value)");
 }
 
 body replace_with replace_hpux_tcb_value(value)
 {
-  replace_value => ":$(match.1)$(match.2)$(value):";
-  occurrences   => "first";
+  replace_value => ":$(match.1)$(match.2)$(value)$(match.3)";
+  occurrences   => "all";
 }
 
