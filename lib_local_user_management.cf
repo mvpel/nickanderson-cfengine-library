@@ -59,10 +59,13 @@ bundle agent local_users_enforce_password (users) {
     classes:
         hpux::
             "have_trusted_mode"
+                comment    => "Determine if this HP-UX system is using Trusted Mode extensions",
                 expression => fileexists("/tcb/files/auth/");
 
             "any"
-                expression => regextract("^(.).*", "$(usersindex)", "$(usersindex)_chars");
+                comment    => "Get the first character of the username needed to build TCB file path",
+                expression => regextract("^(.).*", "$(usersindex)", "$(usersindex)_chars"),
+                ifvarclass => "have_trusted_mode";
 
     files:
         linux|solaris|(hpux.!have_trusted_mode)::
@@ -110,7 +113,7 @@ bundle agent local_users_enforce_password (users) {
 
 bundle edit_line set_hpux_tcb(key, value)
 # Insures an existing key in the HP-UX Trusted Mode TCB database
-# targe file is set to the specified value.
+# target file is set to the specified value.
 {
     replace_patterns:
 	    ":($(key))([=#])(?!$(value))[^:]*(:|\\\\|$)"
