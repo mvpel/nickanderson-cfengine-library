@@ -112,7 +112,7 @@ bundle agent local_users_enforce_password (users) {
 }
 
 bundle edit_line set_hpux_tcb(key, value)
-# Insures an existing key in the HP-UX Trusted Mode TCB database
+# Ensures an existing key in the HP-UX Trusted Mode TCB database
 # target file is set to the specified value.
 {
     replace_patterns:
@@ -128,7 +128,7 @@ body replace_with replace_hpux_tcb_value(value)
 }
 
 bundle edit_line set_aix_stanza(stanza_tag, key, value)
-# Insures an existing key in the specified stanza of an AIX
+# Ensures an existing key in the specified stanza of an AIX
 # stanza-oriented config file, such as /etc/security/password,
 # is set to the specified value.
 {
@@ -138,13 +138,14 @@ bundle edit_line set_aix_stanza(stanza_tag, key, value)
              replace_with  => replace_aix_stanza_value("$(value)");
 }
 
-body select_aix_stanza(stanza_tag)
+body select_region select_aix_stanza(stanza_tag)
 {
   select_start            => "^$(stanza_tag):";
   select_end              => "^\h*$";
+  include_start_delimiter => "yes";
 }
 
-body replace_aix_stanza_value(value)
+body replace_with replace_aix_stanza_value(value)
 {
   replace_value => "$(match.1)$(match.2)$(match.3)$(value)";
   occurrences   => "all";
