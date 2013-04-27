@@ -70,36 +70,37 @@ bundle agent local_users_enforce_password (users) {
     files:
         linux|solaris|(hpux.!have_trusted_mode)::
             "$(pwfile)"
+                comment     => "Update last password change to today if the password is updated",
+                edit_line   => set_user_field("$(usersindex)","3","$(days_since_epoch)"),
+                ifvarclass  => "set_$(usersindex)_password";
+
+            "$(pwfile)"
                 comment     => "Ensure password is set as expected",
                 edit_line   => set_user_field("$(usersindex)","2","$($(this.users)[$(this.usersindex)][passwdhash])"),
                 classes     => if_repaired("set_$(usersindex)_password");
 
-            "$(pwfile)"
-                comment     => "Update date of last password change with todays date expressed in days since epoch if the password is updated",
-                edit_line   => set_user_field("$(usersindex)","3","$(days_since_epoch)"),
+        hpux.have_trusted_mode::
+             "/tcb/files/auth/$($(this.usersindex)_chars[1])/$(this.usersindex)"
+                comment     => "Update time of last password change to current time if the password is updated",
+                edit_line   => set_hpux_tcb("u_succhg", "$(seconds_since_epoch)"),
                 ifvarclass  => "set_$(usersindex)_password";
 
-        hpux.have_trusted_mode::
              "/tcb/files/auth/$($(this.usersindex)_chars[1])/$(this.usersindex)"
                 comment     => "Ensure TCB password is set as expected",
                 edit_line   => set_hpux_tcb("u_pwd", "$($(this.users)[$(this.usersindex)][passwdhash])"),
                 classes     => if_repaired("set_$(usersindex)_password");
 
-             "/tcb/files/auth/$($(this.usersindex)_chars[1])/$(this.usersindex)"
-                comment     => "Update time of last password change to current time expressed as seconds since epoch if the password is updated",
-                edit_line   => set_hpux_tcb("u_succhg", "$(seconds_since_epoch)"),
-                ifvarclass  => "set_$(usersindex)_password";
-
         aix::
              "$(pwfile)"
-                comment     => "Ensure password hash is set as expected",
-                edit_line   => set_aix_stanza("$(this.usersindex)", "password", "$($(this.users)[$(this.usersindex)][passwdhash])"),
-                classes     => if_repaired("set_$(usersindex)_password");
-
-             "$(pwfile)"
-                comment     => "Update time of last password change to current time expressed as seconds since epoch if the password is updated",
+                comment     => "Update time of last password change to current time if the password is updated",
                 edit_line   => set_aix_stanza("$(this.usersindex)", "lastupdate", "$(seconds_since_epoch)"),
                 ifvarclass  => "set_$(usersindex)_password";
+
+             "$(pwfile)"
+                comment     => "Ensure password hash is set as expected",
+                edit_line   => set_aix_stanza("$(this.usersindex)", "password",
+                                              "$($(this.users)[$(this.usersindex)][passwdhash])"),
+                classes     => if_repaired("set_$(usersindex)_password");
 
     reports:
         verbose_mode.(linux|solaris|aix|(hpux.!have_trusted_mode))::
@@ -133,20 +134,21 @@ bundle edit_line set_aix_stanza(stanza_tag, key, value)
 # is set to the specified value.
 {
     replace_patterns:
-        "(\h*)($(key))(\h*=\h*)(?!$(value)).*"
+        "^(\s*)($(key))(\h*)=\h*(?!$(value))\H*\h*$"
              select_region => select_aix_stanza("$(stanza_tag)"),
              replace_with  => replace_aix_stanza_value("$(value)");
 }
 
 body select_region select_aix_stanza(stanza_tag)
 {
-  select_start            => "^$(stanza_tag):";
-  select_end              => "^\h*$";
+  select_start            => "^$(stanza_tag):\h*$";
+  select_end              => "^(\h*|\H+:)$";
   include_start_delimiter => "yes";
+  include_end_delimiter   => "no";
 }
 
 body replace_with replace_aix_stanza_value(value)
 {
-  replace_value => "$(match.1)$(match.2)$(match.3)$(value)";
+  replace_value => "$(match.1)$(match.2)$(match.3)= $(value)";
   occurrences   => "all";
 }
